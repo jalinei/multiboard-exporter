@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.venv/
+venv/
+env/
+
+# KiCad docs
+kicad-dev-docs/
+
+# KiCad generated outputs
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.kicad_pro-bak
+*.kicad_prl
+*.kicad_dru
+*.step
+*.stp
+*.wrl
+*.vrml
+*.gbr
+*.gbrjob
+*.drl
+*.pos
+*.rpt
+*.xml
+*.net
+
+# Local export/build folders used by the POC and plugin
+build/
+build_*/
+*_multiboard_export/
+multiboard_export/
+
+# Local KiCad/debug logs
+*.log
+api.log
+kicad_api_trace.log
+
+# Packaging/install artifacts
+dist/
+*.zip
+*.tar.gz
+
+# Editor and OS noise
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store

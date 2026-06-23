@@ -1,0 +1,28 @@
+{
+  "$schema": "https://go.kicad.org/api/schemas/v1",
+  "identifier": "com.github.jal.multiboard_geometry_exporter",
+  "name": "Multi-board Geometry Exporter",
+  "description": "Create per-board temporary PCB files from user-defined bounding boxes and export geometry.",
+  "runtime": {
+    "type": "python",
+    "min_version": "3.9"
+  },
+  "actions": [
+    {
+      "identifier": "export-boards",
+      "name": "Export Board Geometries",
+      "description": "Split the open PCB into user-defined board regions and export geometry.",
+      "show-button": true,
+      "scopes": [
+        "pcb"
+      ],
+      "entrypoint": "multiboard_exporter/ipc_action.py",
+      "icons-light": [
+        "refresh_stackup_light_24.png"
+      ],
+      "icons-dark": [
+        "refresh_stackup_dark_24.png"
+      ]
+    }
+  ]
+}
