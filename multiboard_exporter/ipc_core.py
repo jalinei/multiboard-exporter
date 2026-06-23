@@ -158,6 +158,45 @@ def export_step(kicad, kicad_pcb, step_out, logger=None):
     return step_out
 
 
+def export_wrl(kicad, kicad_pcb, wrl_out, logger=None):
+    try:
+        kicad_cli = kicad.get_kicad_binary_path("kicad-cli")
+    except Exception:
+        kicad_cli = "kicad-cli"
+
+    cmd = [
+        kicad_cli,
+        "pcb",
+        "export",
+        "vrml",
+        kicad_pcb,
+        "-o",
+        wrl_out,
+        "--force",
+        "--units",
+        "mm",
+    ]
+
+    if logger:
+        logger("Running: {}".format(" ".join(cmd)))
+
+    subprocess.run(cmd, check=True)
+    return wrl_out
+
+
+def normalize_export_format(export_step_files=True, export_format=None):
+    if export_format is None:
+        return "step" if export_step_files else None
+
+    if export_format in ("", "none", "None"):
+        return None
+
+    if export_format not in ("step", "wrl"):
+        raise ValueError("Unsupported export format: {}".format(export_format))
+
+    return export_format
+
+
 def collect_items_to_remove(board, region):
     to_remove = []
 
@@ -196,14 +235,25 @@ def item_overlaps_region(board, item, region):
     return True
 
 
-def export_regions(kicad, source_board, output_dir, regions, export_step_files=True, logger=None):
+def export_regions(
+    kicad,
+    source_board,
+    output_dir,
+    regions,
+    export_step_files=True,
+    export_format=None,
+    logger=None,
+):
+    export_format = normalize_export_format(export_step_files, export_format)
+
     try:
         return export_regions_with_headless_ipc(
             kicad=kicad,
             source_board=source_board,
             output_dir=output_dir,
             regions=regions,
-            export_step_files=export_step_files,
+            export_step_files=bool(export_format),
+            export_format=export_format,
             logger=logger,
         )
     except Exception as exc:
@@ -217,7 +267,8 @@ def export_regions(kicad, source_board, output_dir, regions, export_step_files=T
         source_board=source_board,
         output_dir=output_dir,
         regions=regions,
-        export_step_files=export_step_files,
+        export_step_files=bool(export_format),
+        export_format=export_format,
         logger=logger,
     )
 
@@ -228,8 +279,10 @@ def export_regions_with_headless_ipc(
     output_dir,
     regions,
     export_step_files=True,
+    export_format=None,
     logger=None,
 ):
+    export_format = normalize_export_format(export_step_files, export_format)
     os.makedirs(output_dir, exist_ok=True)
     tmp_dir = tempfile.mkdtemp(prefix="kicad_multiboard_")
     source_temp = os.path.join(tmp_dir, "source.kicad_pcb")
@@ -250,6 +303,7 @@ def export_regions_with_headless_ipc(
         output_base = safe_output_name(name)
         output_pcb = os.path.join(output_dir, "{}.kicad_pcb".format(output_base))
         output_step = os.path.join(output_dir, "{}.step".format(output_base))
+        output_wrl = os.path.join(output_dir, "{}.wrl".format(output_base))
 
         worker = KiCad(headless=True, kicad_cli_path=kicad_cli, file_path=source_temp)
         try:
@@ -278,9 +332,12 @@ def export_regions_with_headless_ipc(
             worker.close()
 
         result = {"name": name, "pcb": output_pcb}
-        if export_step_files:
+        if export_format == "step":
             export_step(kicad, output_pcb, output_step, logger=logger)
             result["step"] = output_step
+        elif export_format == "wrl":
+            export_wrl(kicad, output_pcb, output_wrl, logger=logger)
+            result["wrl"] = output_wrl
 
         outputs.append(result)
 
@@ -292,8 +349,10 @@ def export_regions_with_legacy_worker(
     output_dir,
     regions,
     export_step_files=True,
+    export_format=None,
     logger=None,
 ):
+    export_format = normalize_export_format(export_step_files, export_format)
     os.makedirs(output_dir, exist_ok=True)
     tmp_dir = tempfile.mkdtemp(prefix="kicad_multiboard_")
     source_temp = os.path.join(tmp_dir, "source.kicad_pcb")
@@ -306,7 +365,7 @@ def export_regions_with_legacy_worker(
         "source_pcb": source_temp,
         "output_dir": output_dir,
         "regions": regions,
-        "export_step_files": export_step_files,
+        "export_format": export_format,
     }
 
     with open(config_path, "w", encoding="utf-8") as config_file:
@@ -334,7 +393,7 @@ def export_regions_with_legacy_worker(
             if logger and completed.stdout.strip():
                 for line in completed.stdout.strip().splitlines():
                     logger(line)
-            return expected_outputs(output_dir, regions, export_step_files)
+            return expected_outputs(output_dir, regions, export_format=export_format)
 
         failures.append(
             "{} exited with {}\nstdout:\n{}\nstderr:\n{}".format(
@@ -371,7 +430,8 @@ def legacy_python_candidates():
     return result
 
 
-def expected_outputs(output_dir, regions, export_step_files):
+def expected_outputs(output_dir, regions, export_step_files=True, export_format=None):
+    export_format = normalize_export_format(export_step_files, export_format)
     outputs = []
 
     for region in regions:
@@ -381,8 +441,10 @@ def expected_outputs(output_dir, regions, export_step_files):
             "name": name,
             "pcb": os.path.join(output_dir, "{}.kicad_pcb".format(output_base)),
         }
-        if export_step_files:
+        if export_format == "step":
             result["step"] = os.path.join(output_dir, "{}.step".format(output_base))
+        elif export_format == "wrl":
+            result["wrl"] = os.path.join(output_dir, "{}.wrl".format(output_base))
         outputs.append(result)
 
     return outputs

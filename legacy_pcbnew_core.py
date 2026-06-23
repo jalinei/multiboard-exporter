@@ -204,7 +204,49 @@ def export_step(kicad_pcb, step_out, logger=None):
     return step_out
 
 
-def export_regions(source_pcb, output_dir, regions, export_step_files=True, logger=None):
+def export_wrl(kicad_pcb, wrl_out, logger=None):
+    cmd = [
+        "kicad-cli",
+        "pcb",
+        "export",
+        "vrml",
+        kicad_pcb,
+        "-o",
+        wrl_out,
+        "--force",
+        "--units",
+        "mm",
+    ]
+
+    if logger:
+        logger("Running: {}".format(" ".join(cmd)))
+
+    subprocess.run(cmd, check=True)
+    return wrl_out
+
+
+def normalize_export_format(export_step_files=True, export_format=None):
+    if export_format is None:
+        return "step" if export_step_files else None
+
+    if export_format in ("", "none", "None"):
+        return None
+
+    if export_format not in ("step", "wrl"):
+        raise ValueError("Unsupported export format: {}".format(export_format))
+
+    return export_format
+
+
+def export_regions(
+    source_pcb,
+    output_dir,
+    regions,
+    export_step_files=True,
+    export_format=None,
+    logger=None,
+):
+    export_format = normalize_export_format(export_step_files, export_format)
     os.makedirs(output_dir, exist_ok=True)
     outputs = []
 
@@ -213,6 +255,7 @@ def export_regions(source_pcb, output_dir, regions, export_step_files=True, logg
         safe_name = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
         temp_pcb = os.path.join(output_dir, "{}.kicad_pcb".format(safe_name))
         temp_step = os.path.join(output_dir, "{}.step".format(safe_name))
+        temp_wrl = os.path.join(output_dir, "{}.wrl".format(safe_name))
 
         generate_temp_board(
             source_pcb,
@@ -223,9 +266,12 @@ def export_regions(source_pcb, output_dir, regions, export_step_files=True, logg
         )
 
         result = {"name": name, "pcb": temp_pcb}
-        if export_step_files:
+        if export_format == "step":
             export_step(temp_pcb, temp_step, logger=logger)
             result["step"] = temp_step
+        elif export_format == "wrl":
+            export_wrl(temp_pcb, temp_wrl, logger=logger)
+            result["wrl"] = temp_wrl
 
         outputs.append(result)
 

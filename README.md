@@ -5,7 +5,7 @@ This is a KiCad PCB editor IPC action plugin extracted from `split_boards.py`.
 It lets the user define one or more board bounding boxes in millimeters relative
 to the source board grid origin. For each board, it creates a temporary
 `.kicad_pcb` containing only the items inside that board region, sets that temp
-board's grid origin, and can export STEP geometry with `kicad-cli`.
+board's grid origin, and can export STEP or WRL geometry with `kicad-cli`.
 
 ## KiCad API
 
@@ -62,6 +62,14 @@ Each row in the GUI defines:
 
 KiCad PCB coordinates use positive X to the right and positive Y downward, so a
 board above a bottom-left origin usually has negative Y coordinates.
+
+The `Apply` button saves the current output directory, geometry format, and
+board rows without exporting. `Export` saves those same settings before
+generating files.
+
+The geometry format selector can export STEP, export WRL through
+`kicad-cli pcb export vrml`, or skip geometry export and only write the
+per-board `.kicad_pcb` files.
 
 ## CLI
 

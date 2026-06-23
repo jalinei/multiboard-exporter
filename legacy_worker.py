@@ -20,7 +20,8 @@ def main():
         source_pcb=config["source_pcb"],
         output_dir=config["output_dir"],
         regions=config["regions"],
-        export_step_files=config["export_step_files"],
+        export_step_files=config.get("export_step_files", True),
+        export_format=config.get("export_format"),
         logger=print,
     )
 

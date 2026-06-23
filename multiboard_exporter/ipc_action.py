@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sys
 import traceback
@@ -11,6 +12,14 @@ from kipy import KiCad
 
 from multiboard_exporter.dialog import MultiBoardExporterDialog
 from multiboard_exporter.ipc_core import export_regions
+
+
+def settings_path_for_board(project_path, board_name):
+    config_dir = wx.StandardPaths.Get().GetUserConfigDir()
+    plugin_dir = os.path.join(config_dir, "multiboard_exporter")
+    project_key = hashlib.sha256(os.path.abspath(project_path).encode("utf-8")).hexdigest()[:16]
+    board_key = "".join(c if c.isalnum() or c in ("-", "_", ".") else "_" for c in board_name or "board")
+    return os.path.join(plugin_dir, "{}__{}.json".format(project_key, board_key))
 
 
 def show_error(title, exc):
@@ -35,8 +44,9 @@ def main():
         project_path = getattr(board.document.project, "path", os.getcwd())
         board_name = os.path.splitext(getattr(board.document, "board_filename", "board"))[0]
         default_output_dir = os.path.join(project_path, "{}_multiboard_export".format(board_name))
+        settings_path = settings_path_for_board(project_path, board_name)
 
-        dialog = MultiBoardExporterDialog(None, default_output_dir)
+        dialog = MultiBoardExporterDialog(None, default_output_dir, settings_path=settings_path)
         try:
             if dialog.ShowModal() != wx.ID_OK:
                 return 0
@@ -44,7 +54,7 @@ def main():
             try:
                 regions = dialog.get_regions()
                 output_dir = dialog.get_output_dir()
-                export_step = dialog.should_export_step()
+                export_format = dialog.get_export_format()
             except ValueError as exc:
                 wx.MessageBox(str(exc), title, wx.OK | wx.ICON_ERROR)
                 return 1
@@ -62,7 +72,8 @@ def main():
             source_board=board,
             output_dir=output_dir,
             regions=regions,
-            export_step_files=export_step,
+            export_step_files=bool(export_format),
+            export_format=export_format,
             logger=logger,
         )
 
@@ -73,6 +84,8 @@ def main():
             lines.append("  PCB: {}".format(output["pcb"]))
             if "step" in output:
                 lines.append("  STEP: {}".format(output["step"]))
+            if "wrl" in output:
+                lines.append("  WRL: {}".format(output["wrl"]))
 
         wx.MessageBox("\n".join(lines), title, wx.OK | wx.ICON_INFORMATION)
         return 0
