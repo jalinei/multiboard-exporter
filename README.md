@@ -30,18 +30,21 @@ plugin environment cannot find such an interpreter automatically, set
 
 ## Install
 
+Make sure the KiCad plugin API is enabled in KiCad preferences before
+installing or refreshing the plugin.
+
 Copy this whole plugin directory, including `plugin.json`, `requirements.txt`,
-`refresh_stackup_light_24.png`, `refresh_stackup_dark_24.png`, `icon.png`,
+`refresh_stackup_light_24.png`, `refresh_stackup_dark_24.png`,
 `legacy_worker.py`, `legacy_pcbnew_core.py`, and `multiboard_exporter/`, into
 KiCad's IPC plugin directory, then restart KiCad or refresh plugins from the PCB
 editor.
 
 The default Linux path is:
 
-- `~/.local/share/KiCad/<version>/plugins/com_github_jal_multiboard_geometry_exporter/`
+- `~/.local/share/KiCad/<version>/plugins/com_github_jalinei_multiboard_exporter/`
 
 KiCad 10 requires the `plugin.json` identifier to be reverse-DNS style. This
-plugin uses `com.github.jal.multiboard_geometry_exporter`.
+plugin uses `com.github.jalinei.multiboard_exporter`.
 
 KiCad creates a Python environment for the plugin and installs
 `requirements.txt`. The action appears in the PCB editor toolbar/preferences as

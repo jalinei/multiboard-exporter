@@ -1,6 +1,6 @@
 {
   "$schema": "https://go.kicad.org/api/schemas/v1",
-  "identifier": "com.github.jal.multiboard_geometry_exporter",
+  "identifier": "com.github.jalinei.multiboard_exporter",
   "name": "Multi-board Geometry Exporter",
   "description": "Create per-board temporary PCB files from user-defined bounding boxes and export geometry.",
   "runtime": {

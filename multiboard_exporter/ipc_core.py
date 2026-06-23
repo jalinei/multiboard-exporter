@@ -9,7 +9,7 @@ from kipy.geometry import Vector2
 from kipy.util import from_mm
 
 
-PLUGIN_IDENTIFIER = "com.github.jal.multiboard_geometry_exporter"
+PLUGIN_IDENTIFIER = "com.github.jalinei.multiboard_exporter"
 
 
 def safe_output_name(name):
