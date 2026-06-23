@@ -12,6 +12,12 @@ HEADERS = (
     "Y max",
     "Origin X",
     "Origin Y",
+    "3D X",
+    "3D Y",
+    "3D Z",
+    "Rot X",
+    "Rot Y",
+    "Rot Z",
 )
 
 EXPORT_FORMATS = (
@@ -44,6 +50,11 @@ class MultiBoardExporterDialog(wx.Dialog):
             choices=[label for _value, label in EXPORT_FORMATS],
         )
         self.export_format.SetSelection(0)
+        self.export_footprints = wx.CheckBox(
+            self,
+            label="Create/update project footprint library (${KIPRJMOD}/pcb_multiboard.pretty)",
+        )
+        self.export_footprints.SetValue(True)
 
         self.grid = wx.FlexGridSizer(0, len(HEADERS), 6, 6)
         self.grid.AddGrowableCol(0, 1)
@@ -80,6 +91,7 @@ class MultiBoardExporterDialog(wx.Dialog):
         format_row.Add(wx.StaticText(self, label="Geometry export"), 0, wx.ALIGN_CENTER_VERTICAL)
         format_row.Add(self.export_format, 0, wx.LEFT, 8)
         output_box.Add(format_row, 0, wx.TOP, 8)
+        output_box.Add(self.export_footprints, 0, wx.TOP, 8)
 
         toolbar = wx.BoxSizer(wx.HORIZONTAL)
         toolbar.Add(self.add_button, 0)
@@ -97,11 +109,25 @@ class MultiBoardExporterDialog(wx.Dialog):
             self.add_board("Board_A", -0.5, -50.5, 40.5, 0.5, 0.0, 0.0)
             self.add_board("Board_B", 46.5, -25.5, 67.5, 0.5, 47.0, 0.0)
 
-        self.SetMinSize((760, 320))
+        self.SetMinSize((1180, 320))
         self.Fit()
 
-    def add_board(self, name=None, xmin=0.0, ymin=0.0, xmax=10.0, ymax=10.0,
-                  origin_x=0.0, origin_y=0.0):
+    def add_board(
+        self,
+        name=None,
+        xmin=0.0,
+        ymin=0.0,
+        xmax=10.0,
+        ymax=10.0,
+        origin_x=0.0,
+        origin_y=0.0,
+        model_x=0.0,
+        model_y=0.0,
+        model_z=0.0,
+        model_rot_x=0.0,
+        model_rot_y=0.0,
+        model_rot_z=0.0,
+    ):
         index = len(self.rows) + 1
         values = [
             name or "Board_{}".format(index),
@@ -111,6 +137,12 @@ class MultiBoardExporterDialog(wx.Dialog):
             ymax,
             origin_x,
             origin_y,
+            model_x,
+            model_y,
+            model_z,
+            model_rot_x,
+            model_rot_y,
+            model_rot_z,
         ]
 
         controls = []
@@ -156,7 +188,20 @@ class MultiBoardExporterDialog(wx.Dialog):
             except ValueError:
                 raise ValueError("Board '{}' has a non-numeric coordinate.".format(name))
 
-            xmin, ymin, xmax, ymax, origin_x, origin_y = numbers
+            (
+                xmin,
+                ymin,
+                xmax,
+                ymax,
+                origin_x,
+                origin_y,
+                model_x,
+                model_y,
+                model_z,
+                model_rot_x,
+                model_rot_y,
+                model_rot_z,
+            ) = numbers
             if xmin == xmax or ymin == ymax:
                 raise ValueError("Board '{}' has an empty bounding box.".format(name))
 
@@ -165,6 +210,8 @@ class MultiBoardExporterDialog(wx.Dialog):
                     "name": name,
                     "bbox": (xmin, ymin, xmax, ymax),
                     "new_origin": (origin_x, origin_y),
+                    "model_offset": (model_x, model_y, model_z),
+                    "model_rotation": (model_rot_x, model_rot_y, model_rot_z),
                 }
             )
 
@@ -185,6 +232,9 @@ class MultiBoardExporterDialog(wx.Dialog):
     def should_export_step(self):
         return self.get_export_format() == "step"
 
+    def should_export_footprints(self):
+        return self.export_footprints.GetValue()
+
     def save_settings_with_feedback(self):
         try:
             self.save_settings()
@@ -204,6 +254,7 @@ class MultiBoardExporterDialog(wx.Dialog):
         return {
             "output_dir": self.get_output_dir(),
             "export_format": self.get_export_format(),
+            "export_footprints": self.should_export_footprints(),
             "regions": self.get_regions(),
         }
 
@@ -235,12 +286,15 @@ class MultiBoardExporterDialog(wx.Dialog):
                 export_format = None
             elif export_format is True:
                 export_format = "step"
+            self.export_footprints.SetValue(data.get("export_footprints", True) is not False)
 
             regions = data.get("regions") or []
             loaded_rows = []
             for region in regions:
                 bbox = region.get("bbox") or (0.0, 0.0, 10.0, 10.0)
                 new_origin = region.get("new_origin") or (0.0, 0.0)
+                model_offset = region.get("model_offset") or (0.0, 0.0, 0.0)
+                model_rotation = region.get("model_rotation") or (0.0, 0.0, 0.0)
                 loaded_rows.append(
                     (
                         region.get("name"),
@@ -250,6 +304,12 @@ class MultiBoardExporterDialog(wx.Dialog):
                         bbox[3],
                         new_origin[0],
                         new_origin[1],
+                        model_offset[0],
+                        model_offset[1],
+                        model_offset[2],
+                        model_rotation[0],
+                        model_rotation[1],
+                        model_rotation[2],
                     )
                 )
 

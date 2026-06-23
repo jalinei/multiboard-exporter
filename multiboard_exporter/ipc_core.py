@@ -10,10 +10,180 @@ from kipy.util import from_mm
 
 
 PLUGIN_IDENTIFIER = "com.github.jalinei.multiboard_exporter"
+FOOTPRINT_LIBRARY_NAME = "pcb_multiboard"
+FOOTPRINT_LIBRARY_DIRNAME = "pcb_multiboard.pretty"
+FOOTPRINT_LIBRARY_URI = "${{KIPRJMOD}}/{}".format(FOOTPRINT_LIBRARY_DIRNAME)
 
 
 def safe_output_name(name):
     return "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in name)
+
+
+def sexpr_string(value):
+    return '"{}"'.format(str(value).replace("\\", "\\\\").replace('"', '\\"'))
+
+
+def model_path_reference(model_path, project_dir=None):
+    if project_dir:
+        relative_path = os.path.relpath(model_path, project_dir)
+        return "${{KIPRJMOD}}/{}".format(relative_path.replace(os.sep, "/"))
+
+    return os.path.basename(model_path)
+
+
+def project_footprint_library_dir(project_dir, output_dir):
+    if project_dir:
+        return os.path.join(project_dir, FOOTPRINT_LIBRARY_DIRNAME)
+
+    return os.path.join(output_dir, FOOTPRINT_LIBRARY_DIRNAME)
+
+
+def footprint_library_entry():
+    return (
+        "  (lib (name {name})(type \"KiCad\")(uri {uri})"
+        "(options \"\")(descr \"Multiboard exported footprints\"))"
+    ).format(
+        name=sexpr_string(FOOTPRINT_LIBRARY_NAME),
+        uri=sexpr_string(FOOTPRINT_LIBRARY_URI),
+    )
+
+
+def iter_top_level_lib_ranges(table_text):
+    index = 0
+    while True:
+        start = table_text.find("(lib", index)
+        if start == -1:
+            return
+
+        if start > 0 and table_text[start - 1] not in " \t\r\n(":
+            index = start + 4
+            continue
+
+        depth = 0
+        in_string = False
+        escaped = False
+        for pos in range(start, len(table_text)):
+            char = table_text[pos]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+            else:
+                if char == '"':
+                    in_string = True
+                elif char == "(":
+                    depth += 1
+                elif char == ")":
+                    depth -= 1
+                    if depth == 0:
+                        yield start, pos + 1
+                        index = pos + 1
+                        break
+        else:
+            return
+
+
+def lib_entry_name_matches(entry, library_name):
+    return (
+        '(name "{}")'.format(library_name) in entry
+        or "(name {})".format(library_name) in entry
+    )
+
+
+def ensure_project_footprint_library(project_dir, logger=None):
+    if not project_dir:
+        return
+
+    os.makedirs(os.path.join(project_dir, FOOTPRINT_LIBRARY_DIRNAME), exist_ok=True)
+    table_path = os.path.join(project_dir, "fp-lib-table")
+    entry = footprint_library_entry()
+
+    if os.path.isfile(table_path):
+        with open(table_path, "r", encoding="utf-8") as table_file:
+            table_text = table_file.read()
+    else:
+        table_text = "(fp_lib_table\n)\n"
+
+    replacement_range = None
+    for start, end in iter_top_level_lib_ranges(table_text):
+        if lib_entry_name_matches(table_text[start:end], FOOTPRINT_LIBRARY_NAME):
+            replacement_range = (start, end)
+            break
+
+    if replacement_range:
+        start, end = replacement_range
+        updated_text = table_text[:start] + entry + table_text[end:]
+    elif table_text.rstrip().endswith(")"):
+        insert_at = table_text.rfind(")")
+        prefix = table_text[:insert_at].rstrip()
+        suffix = table_text[insert_at:]
+        updated_text = "{}\n{}\n{}".format(prefix, entry, suffix)
+    else:
+        updated_text = "(fp_lib_table\n{}\n)\n".format(entry)
+
+    if updated_text != table_text:
+        with open(table_path, "w", encoding="utf-8") as table_file:
+            table_file.write(updated_text)
+        if logger:
+            logger("Registered footprint library: {}".format(FOOTPRINT_LIBRARY_URI))
+
+
+def region_model_offset(region):
+    return tuple(region.get("model_offset") or (0.0, 0.0, 0.0))
+
+
+def region_model_rotation(region):
+    return tuple(region.get("model_rotation") or (0.0, 0.0, 0.0))
+
+
+def write_footprint_file(
+    footprint_path,
+    footprint_name,
+    model_path=None,
+    region=None,
+    project_dir=None,
+):
+    model_offset = region_model_offset(region or {})
+    model_rotation = region_model_rotation(region or {})
+    lines = [
+        "(footprint {}".format(sexpr_string(footprint_name)),
+        "  (version 20240108)",
+        "  (generator \"multiboard_exporter\")",
+        "  (layer \"F.Cu\")",
+        "  (attr board_only exclude_from_pos_files exclude_from_bom)",
+        "  (fp_text reference \"REF**\" (at 0 -2) (layer \"F.SilkS\")",
+        "    (effects (font (size 1 1) (thickness 0.1)))",
+        "  )",
+        "  (fp_text value {} (at 0 2) (layer \"F.Fab\")".format(
+            sexpr_string(footprint_name)
+        ),
+        "    (effects (font (size 1 1) (thickness 0.1)))",
+        "  )",
+    ]
+
+    if model_path:
+        lines.extend(
+            [
+                "  (model {}".format(
+                    sexpr_string(model_path_reference(model_path, project_dir))
+                ),
+                "    (offset (xyz {} {} {}))".format(*model_offset),
+                "    (scale (xyz 1 1 1))",
+                "    (rotate (xyz {} {} {}))".format(*model_rotation),
+                "  )",
+            ]
+        )
+
+    lines.append(")")
+
+    with open(footprint_path, "w", encoding="utf-8") as footprint_file:
+        footprint_file.write("\n".join(lines))
+        footprint_file.write("\n")
+
+    return footprint_path
 
 
 def point_in_region(point, region):
@@ -242,6 +412,8 @@ def export_regions(
     regions,
     export_step_files=True,
     export_format=None,
+    project_dir=None,
+    export_footprints=True,
     logger=None,
 ):
     export_format = normalize_export_format(export_step_files, export_format)
@@ -254,6 +426,8 @@ def export_regions(
             regions=regions,
             export_step_files=bool(export_format),
             export_format=export_format,
+            project_dir=project_dir,
+            export_footprints=export_footprints,
             logger=logger,
         )
     except Exception as exc:
@@ -269,6 +443,8 @@ def export_regions(
         regions=regions,
         export_step_files=bool(export_format),
         export_format=export_format,
+        project_dir=project_dir,
+        export_footprints=export_footprints,
         logger=logger,
     )
 
@@ -280,10 +456,17 @@ def export_regions_with_headless_ipc(
     regions,
     export_step_files=True,
     export_format=None,
+    project_dir=None,
+    export_footprints=True,
     logger=None,
 ):
     export_format = normalize_export_format(export_step_files, export_format)
     os.makedirs(output_dir, exist_ok=True)
+    footprint_library_dir = None
+    if export_footprints:
+        footprint_library_dir = project_footprint_library_dir(project_dir, output_dir)
+        os.makedirs(footprint_library_dir, exist_ok=True)
+        ensure_project_footprint_library(project_dir, logger=logger)
     tmp_dir = tempfile.mkdtemp(prefix="kicad_multiboard_")
     source_temp = os.path.join(tmp_dir, "source.kicad_pcb")
 
@@ -304,6 +487,12 @@ def export_regions_with_headless_ipc(
         output_pcb = os.path.join(output_dir, "{}.kicad_pcb".format(output_base))
         output_step = os.path.join(output_dir, "{}.step".format(output_base))
         output_wrl = os.path.join(output_dir, "{}.wrl".format(output_base))
+        output_footprint = None
+        if export_footprints:
+            output_footprint = os.path.join(
+                footprint_library_dir,
+                "{}.kicad_mod".format(output_base),
+            )
 
         worker = KiCad(headless=True, kicad_cli_path=kicad_cli, file_path=source_temp)
         try:
@@ -332,12 +521,25 @@ def export_regions_with_headless_ipc(
             worker.close()
 
         result = {"name": name, "pcb": output_pcb}
+        model_path = None
         if export_format == "step":
             export_step(kicad, output_pcb, output_step, logger=logger)
             result["step"] = output_step
+            model_path = output_step
         elif export_format == "wrl":
             export_wrl(kicad, output_pcb, output_wrl, logger=logger)
             result["wrl"] = output_wrl
+            model_path = output_wrl
+
+        if export_footprints:
+            write_footprint_file(
+                output_footprint,
+                output_base,
+                model_path,
+                region,
+                project_dir=project_dir,
+            )
+            result["footprint"] = output_footprint
 
         outputs.append(result)
 
@@ -350,6 +552,8 @@ def export_regions_with_legacy_worker(
     regions,
     export_step_files=True,
     export_format=None,
+    project_dir=None,
+    export_footprints=True,
     logger=None,
 ):
     export_format = normalize_export_format(export_step_files, export_format)
@@ -366,6 +570,8 @@ def export_regions_with_legacy_worker(
         "output_dir": output_dir,
         "regions": regions,
         "export_format": export_format,
+        "project_dir": project_dir,
+        "export_footprints": export_footprints,
     }
 
     with open(config_path, "w", encoding="utf-8") as config_file:
@@ -393,7 +599,13 @@ def export_regions_with_legacy_worker(
             if logger and completed.stdout.strip():
                 for line in completed.stdout.strip().splitlines():
                     logger(line)
-            return expected_outputs(output_dir, regions, export_format=export_format)
+            return expected_outputs(
+                output_dir,
+                regions,
+                export_format=export_format,
+                project_dir=project_dir,
+                export_footprints=export_footprints,
+            )
 
         failures.append(
             "{} exited with {}\nstdout:\n{}\nstderr:\n{}".format(
@@ -430,8 +642,18 @@ def legacy_python_candidates():
     return result
 
 
-def expected_outputs(output_dir, regions, export_step_files=True, export_format=None):
+def expected_outputs(
+    output_dir,
+    regions,
+    export_step_files=True,
+    export_format=None,
+    project_dir=None,
+    export_footprints=True,
+):
     export_format = normalize_export_format(export_step_files, export_format)
+    footprint_library_dir = None
+    if export_footprints:
+        footprint_library_dir = project_footprint_library_dir(project_dir, output_dir)
     outputs = []
 
     for region in regions:
@@ -441,6 +663,11 @@ def expected_outputs(output_dir, regions, export_step_files=True, export_format=
             "name": name,
             "pcb": os.path.join(output_dir, "{}.kicad_pcb".format(output_base)),
         }
+        if export_footprints:
+            result["footprint"] = os.path.join(
+                footprint_library_dir,
+                "{}.kicad_mod".format(output_base),
+            )
         if export_format == "step":
             result["step"] = os.path.join(output_dir, "{}.step".format(output_base))
         elif export_format == "wrl":

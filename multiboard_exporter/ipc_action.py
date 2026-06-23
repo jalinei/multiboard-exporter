@@ -55,6 +55,7 @@ def main():
                 regions = dialog.get_regions()
                 output_dir = dialog.get_output_dir()
                 export_format = dialog.get_export_format()
+                export_footprints = dialog.should_export_footprints()
             except ValueError as exc:
                 wx.MessageBox(str(exc), title, wx.OK | wx.ICON_ERROR)
                 return 1
@@ -74,6 +75,8 @@ def main():
             regions=regions,
             export_step_files=bool(export_format),
             export_format=export_format,
+            project_dir=project_path,
+            export_footprints=export_footprints,
             logger=logger,
         )
 
@@ -82,6 +85,8 @@ def main():
             lines.append("")
             lines.append(output["name"])
             lines.append("  PCB: {}".format(output["pcb"]))
+            if "footprint" in output:
+                lines.append("  Footprint: {}".format(output["footprint"]))
             if "step" in output:
                 lines.append("  STEP: {}".format(output["step"]))
             if "wrl" in output:

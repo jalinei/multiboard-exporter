@@ -22,6 +22,8 @@ def main():
         regions=config["regions"],
         export_step_files=config.get("export_step_files", True),
         export_format=config.get("export_format"),
+        project_dir=config.get("project_dir"),
+        export_footprints=config.get("export_footprints", True),
         logger=print,
     )
 

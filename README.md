@@ -5,7 +5,9 @@ This is a KiCad PCB editor IPC action plugin extracted from `split_boards.py`.
 It lets the user define one or more board bounding boxes in millimeters relative
 to the source board grid origin. For each board, it creates a temporary
 `.kicad_pcb` containing only the items inside that board region, sets that temp
-board's grid origin, and can export STEP or WRL geometry with `kicad-cli`.
+board's grid origin, writes a matching `.kicad_mod` footprint into
+`${KIPRJMOD}/pcb_multiboard.pretty`, and can export STEP or WRL geometry with
+`kicad-cli`.
 
 ## KiCad API
 
@@ -59,6 +61,10 @@ Each row in the GUI defines:
   board grid origin, in mm.
 - `Origin X`, `Origin Y`: new grid origin for the generated temp board, also
   relative to the source grid origin.
+- `3D X`, `3D Y`, `3D Z`: model offset written into the generated footprint's
+  3D model entry, in mm.
+- `Rot X`, `Rot Y`, `Rot Z`: model rotation written into the generated
+  footprint's 3D model entry, in degrees.
 
 KiCad PCB coordinates use positive X to the right and positive Y downward, so a
 board above a bottom-left origin usually has negative Y coordinates.
@@ -68,8 +74,12 @@ board rows without exporting. `Export` saves those same settings before
 generating files.
 
 The geometry format selector can export STEP, export WRL through
-`kicad-cli pcb export vrml`, or skip geometry export and only write the
-per-board `.kicad_pcb` files.
+`kicad-cli pcb export vrml`, or skip geometry export. Each board always gets a
+per-board `.kicad_pcb`. The footprint library checkbox is enabled by default;
+when enabled, footprints are written to `${KIPRJMOD}/pcb_multiboard.pretty`,
+and the project `fp-lib-table` is updated with that library. The footprint
+includes a 3D model reference when STEP or WRL export is enabled. Generated 3D
+model paths use `${KIPRJMOD}` and are relative to the source project directory.
 
 ## CLI
 
